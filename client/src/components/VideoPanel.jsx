@@ -84,7 +84,7 @@ import Peer from 'simple-peer';
 import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 
-const socket = io("http://localhost:5000");
+import { initSocket } from "../socket"; // adjust path as needed
 
 const VideoPanel = () => {
   const [peers, setPeers] = useState([]); // { peerID, peer, stream }
@@ -97,38 +97,61 @@ const VideoPanel = () => {
   const { roomId } = useParams();
 
   useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(currentStream => {
-      setStream(currentStream);
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = currentStream;
-      }
-
-      socket.emit("join-room", roomId, socket.id);
-
-      socket.on("user-connected", userId => {
-        const peer = createPeer(userId, socket.id, currentStream);
-        peersRef.current.push({ peerID: userId, peer });
-        setPeers(prev => [...prev, { peerID: userId, peer, stream: null }]);
-      });
-
-      socket.on("offer", handleReceiveCall);
-      socket.on("answer", handleAnswer);
-      socket.on("ice-candidate", handleNewICECandidateMsg);
-
-      socket.on("user-disconnected", userId => {
-        const peerObj = peersRef.current.find(p => p.peerID === userId);
-        if (peerObj) {
-          peerObj.peer.destroy();
+    let isMounted = true;
+  
+    const setupMediaAndSocket = async () => {
+      try {
+        const currentStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+  
+        if (!isMounted) return;
+  
+        setStream(currentStream);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = currentStream;
         }
-        peersRef.current = peersRef.current.filter(p => p.peerID !== userId);
-        setPeers(prev => prev.filter(p => p.peerID !== userId));
-      });
-    });
-
+  
+        const socketInstance = await initSocket();
+        socketRef.current = socketInstance;
+  
+        socketInstance.emit("join-room", roomId, socketInstance.id);
+  
+        socketInstance.on("user-connected", userId => {
+          const peer = createPeer(userId, socketInstance.id, currentStream);
+          peersRef.current.push({ peerID: userId, peer });
+          setPeers(prev => [...prev, { peerID: userId, peer, stream: null }]);
+        });
+  
+        socketInstance.on("offer", handleReceiveCall);
+        socketInstance.on("answer", handleAnswer);
+        socketInstance.on("ice-candidate", handleNewICECandidateMsg);
+  
+        socketInstance.on("user-disconnected", userId => {
+          const peerObj = peersRef.current.find(p => p.peerID === userId);
+          if (peerObj) {
+            peerObj.peer.destroy();
+          }
+          peersRef.current = peersRef.current.filter(p => p.peerID !== userId);
+          setPeers(prev => prev.filter(p => p.peerID !== userId));
+        });
+      } catch (err) {
+        console.error("Error accessing media devices.", err);
+      }
+    };
+  
+    setupMediaAndSocket();
+  
     return () => {
-      socket.disconnect();
+      isMounted = false;
+      stream?.getTracks().forEach(track => track.stop());
+      peersRef.current.forEach(p => p.peer.destroy());
+      setPeers([]);
+      socketRef.current?.disconnect();
     };
   }, []);
+  
 
   const createPeer = (userToSignal, callerID, stream) => {
     const peer = new Peer({
@@ -136,67 +159,65 @@ const VideoPanel = () => {
       trickle: false,
       stream,
     });
-
+  
     peer.on("signal", signal => {
-      socket.emit("offer", {
+      socketRef.current.emit("offer", {
         target: userToSignal,
+        caller: callerID,
         sdp: signal,
       });
     });
-
+  
     peer.on("stream", remoteStream => {
       updatePeerStream(userToSignal, remoteStream);
     });
-
+  
     return peer;
   };
-
+  
   const handleReceiveCall = ({ sdp, caller }) => {
     const peer = new Peer({
       initiator: false,
       trickle: false,
       stream,
     });
-
+  
     peer.on("signal", signal => {
-      socket.emit("answer", {
+      socketRef.current.emit("answer", {
         target: caller,
+        caller: socketRef.current.id,
         sdp: signal,
       });
     });
-
+  
     peer.on("stream", remoteStream => {
       updatePeerStream(caller, remoteStream);
     });
-
+  
     peer.signal(sdp);
+  
     peersRef.current.push({ peerID: caller, peer });
     setPeers(prev => [...prev, { peerID: caller, peer, stream: null }]);
   };
-
+  
   const updatePeerStream = (peerID, remoteStream) => {
     setPeers(prev =>
-      prev.map(p => p.peerID === peerID ? { ...p, stream: remoteStream } : p)
+      prev.map(p =>
+        p.peerID === peerID ? { ...p, stream: remoteStream } : p
+      )
     );
   };
-
+  
   const handleAnswer = ({ sdp, caller }) => {
     const item = peersRef.current.find(p => p.peerID === caller);
     if (item) item.peer.signal(sdp);
   };
-
+  
   const handleNewICECandidateMsg = ({ candidate, from }) => {
     const peerObj = peersRef.current.find(p => p.peerID === from);
     if (peerObj) peerObj.peer.signal(candidate);
   };
-
-  const handleEndCall = () => {
-    stream?.getTracks().forEach(track => track.stop());
-    peersRef.current.forEach(p => p.peer.destroy());
-    setPeers([]);
-    socket.emit("leave-room", roomId);
-    window.location.href = "/";
-  };
+  
 
   const toggleVideo = () => {
     const videoTrack = stream?.getVideoTracks()[0];
@@ -205,7 +226,7 @@ const VideoPanel = () => {
       setIsVideoOn(videoTrack.enabled);
     }
   };
-
+  
   const toggleAudio = () => {
     const audioTrack = stream?.getAudioTracks()[0];
     if (audioTrack) {
@@ -213,6 +234,15 @@ const VideoPanel = () => {
       setIsAudioOn(audioTrack.enabled);
     }
   };
+  
+  const handleEndCall = () => {
+    stream?.getTracks().forEach(track => track.stop());
+    peersRef.current.forEach(p => p.peer.destroy());
+    setPeers([]);
+    socketRef.current?.emit("leave-room", roomId);
+    window.location.href = "/";
+  };
+  
 
   return (
     <div className="p-2 bg-dark text-white h-100">
