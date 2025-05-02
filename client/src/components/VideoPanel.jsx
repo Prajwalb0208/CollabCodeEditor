@@ -84,11 +84,14 @@ import Peer from 'simple-peer';
 import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 
-const socket = io("http://localhost:5000"); // Your backend URL
+const socket = io("http://localhost:5000");
 
 const VideoPanel = () => {
   const [peers, setPeers] = useState([]);
   const [stream, setStream] = useState();
+  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [isAudioOn, setIsAudioOn] = useState(true);
+
   const peersRef = useRef([]);
   const localVideoRef = useRef();
   const { roomId } = useParams();
@@ -105,7 +108,7 @@ const VideoPanel = () => {
       socket.on("user-connected", userId => {
         const peer = createPeer(userId, socket.id, currentStream);
         peersRef.current.push({ peerID: userId, peer });
-        setPeers(users => [...users, peer]);
+        setPeers(users => [...users, { peerID: userId, peer, stream: null }]);
       });
 
       socket.on("offer", handleReceiveCall);
@@ -142,7 +145,7 @@ const VideoPanel = () => {
     });
 
     peer.on("stream", remoteStream => {
-      addVideoStream(remoteStream, userToSignal);
+      updatePeerStream(userToSignal, remoteStream);
     });
 
     return peer;
@@ -163,12 +166,18 @@ const VideoPanel = () => {
     });
 
     peer.on("stream", remoteStream => {
-      addVideoStream(remoteStream, caller);
+      updatePeerStream(caller, remoteStream);
     });
 
     peer.signal(sdp);
     peersRef.current.push({ peerID: caller, peer });
-    setPeers(prev => [...prev, peer]);
+    setPeers(prev => [...prev, { peerID: caller, peer, stream: null }]);
+  };
+
+  const updatePeerStream = (peerID, remoteStream) => {
+    setPeers(prev =>
+      prev.map(p => p.peerID === peerID ? { ...p, stream: remoteStream } : p)
+    );
   };
 
   const handleAnswer = ({ sdp, caller }) => {
@@ -181,29 +190,56 @@ const VideoPanel = () => {
     if (peerObj) peerObj.peer.signal(candidate);
   };
 
-  const addVideoStream = (stream, id) => {
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.id = `video-${id}`;
-    video.style.width = "100%";
-    video.style.marginBottom = "10px";
-    document.getElementById('remote-videos').appendChild(video);
-  };
-
   const handleEndCall = () => {
     stream.getTracks().forEach(track => track.stop());
     socket.emit("leave-room");
     window.location.href = "/";
   };
 
+  const toggleVideo = () => {
+    const videoTrack = stream.getVideoTracks()[0];
+    videoTrack.enabled = !videoTrack.enabled;
+    setIsVideoOn(videoTrack.enabled);
+  };
+
+  const toggleAudio = () => {
+    const audioTrack = stream.getAudioTracks()[0];
+    audioTrack.enabled = !audioTrack.enabled;
+    setIsAudioOn(audioTrack.enabled);
+  };
+
   return (
     <div className="p-2 bg-dark text-white h-100">
-      <h5 className="text-center">Video Call</h5>
+      <h5 className="text-center mb-2">Video Call</h5>
+      
       <video ref={localVideoRef} autoPlay muted className="w-100 mb-2" style={{ borderRadius: '8px' }} />
-      <div id="remote-videos" style={{ height: "calc(100% - 120px)", overflowY: "auto" }}></div>
-      <button className="btn btn-danger w-100 mt-2" onClick={handleEndCall}>❌ End Call</button>
+
+      <div id="remote-videos" style={{ height: "calc(100% - 160px)", overflowY: "auto" }}>
+        {peers.map(({ peerID, stream }) => (
+          stream && (
+            <video
+              key={peerID}
+              autoPlay
+              playsInline
+              ref={video => {
+                if (video) video.srcObject = stream;
+              }}
+              className="w-100 mb-2"
+              style={{ borderRadius: '8px' }}
+            />
+          )
+        ))}
+      </div>
+
+      <div className="d-flex gap-2 mt-2">
+        <button className="btn btn-secondary w-100" onClick={toggleVideo}>
+          {isVideoOn ? "🎥 Turn Off Camera" : "📷 Turn On Camera"}
+        </button>
+        <button className="btn btn-secondary w-100" onClick={toggleAudio}>
+          {isAudioOn ? "🔊 Mute" : "🔇 Unmute"}
+        </button>
+        <button className="btn btn-danger w-100" onClick={handleEndCall}>❌ End Call</button>
+      </div>
     </div>
   );
 };
