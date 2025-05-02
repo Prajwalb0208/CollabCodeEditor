@@ -9,29 +9,26 @@ function Home() {
 
   const navigate = useNavigate();
 
-  const generateRoomId = (e) => {
-    e.preventDefault();
-    const Id = uuid();
-    setRoomId(Id);
-    toast.success("Room Id is generated");
+  const generateRoomId = () => {
+    const id = uuid();
+    setRoomId(id);
+    toast.success("Room ID generated");
   };
 
   const joinRoom = () => {
     if (!roomId || !username) {
-      toast.error("Both the field is requried");
+      toast.error("Both fields are required");
       return;
     }
 
-    // redirect
     navigate(`/editor/${roomId}`, {
       state: {
         username,
       },
     });
-    toast.success("room is created");
+    toast.success("Joined the room");
   };
 
-  // when enter then also join
   const handleInputEnter = (e) => {
     if (e.code === "Enter") {
       joinRoom();
@@ -39,57 +36,86 @@ function Home() {
   };
 
   return (
-    <div className="container-fluid">
-      <div className="row justify-content-center align-items-center min-vh-100">
-        <div className="col-12 col-md-6">
-          <div className="card shadow-sm p-2 mb-5 bg-secondary rounded">
-            <div className="card-body text-center bg-dark">
-              <img
-                src="/images/codecast.png"
-                alt="Logo"
-                className="img-fluid mx-auto d-block"
-                style={{ maxWidth: "150px" }}
-              />
-              <h4 className="card-title text-light mb-4">Enter the ROOM ID</h4>
+    <div className="container text-center my-5">
+      <h1 className="fw-bold mb-3">Collaborate on Code in Real-Time</h1>
+      <p className="text-muted mb-5">
+        Create or join a coding session to work together with teammates, share
+        your screen, and solve problems together.
+      </p>
 
-              <div className="form-group">
-                <input
-                  type="text"
-                  value={roomId}
-                  onChange={(e) => setRoomId(e.target.value)}
-                  className="form-control mb-2"
-                  placeholder="ROOM ID"
-                  onKeyUp={handleInputEnter}
-                />
+      <div className="row justify-content-center mb-5">
+        <div className="col-md-4">
+          <div className="card shadow-sm p-4">
+            <div className="mb-3">
+              <div className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: "40px", height: "40px" }}>
+                <span className="fs-4 text-primary">+</span>
               </div>
-              <div className="form-group">
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="form-control mb-2"
-                  placeholder="USERNAME"
-                  onKeyUp={handleInputEnter}
-                />
-              </div>
-              <button
-                onClick={joinRoom}
-                className="btn btn-success btn-lg btn-block"
-              >
-                JOIN
-              </button>
-              <p className="mt-3 text-light">
-                Don't have a room ID? create{" "}
-                <span
-                  onClick={generateRoomId}
-                  className=" text-success p-2"
-                  style={{ cursor: "pointer" }}
-                >
-                  {" "}
-                  New Room
-                </span>
-              </p>
             </div>
+            <h5 className="fw-semibold">Create New Session</h5>
+            <p className="text-muted">
+              Start a new collaborative coding session and invite others to join
+            </p>
+            <button
+              onClick={generateRoomId}
+              className="btn btn-primary w-100"
+            >
+              Create New Room
+            </button>
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <div className="card shadow-sm p-4">
+            <h5 className="fw-semibold">Join Existing Session</h5>
+            <p className="text-muted">
+              Enter a session ID to join an existing collaborative room
+            </p>
+            <input
+              type="text"
+              className="form-control mb-2"
+              placeholder="Enter session ID"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              onKeyUp={handleInputEnter}
+            />
+            <input
+              type="text"
+              className="form-control mb-3"
+              placeholder="Enter your name"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyUp={handleInputEnter}
+            />
+            <button
+              onClick={joinRoom}
+              className="btn btn-primary w-100"
+            >
+              Join Session
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="row text-center">
+        <div className="col-md-4">
+          <div className="text-muted">
+            <div className="mb-2">🔁</div>
+            <h6>Real-time Coding</h6>
+            <p className="small">Code together in real-time with teammates across the world</p>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="text-muted">
+            <div className="mb-2">🔗</div>
+            <h6>Share & Collaborate</h6>
+            <p className="small">Share your code, get feedback, and collaborate effortlessly</p>
+          </div>
+        </div>
+        <div className="col-md-4">
+          <div className="text-muted">
+            <div className="mb-2">🎥</div>
+            <h6>Built-in Video Chat</h6>
+            <p className="small">Communicate with teammates using integrated audio and video chat</p>
           </div>
         </div>
       </div>
