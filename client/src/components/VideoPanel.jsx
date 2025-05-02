@@ -87,7 +87,7 @@ import io from 'socket.io-client';
 const socket = io("http://localhost:5000");
 
 const VideoPanel = () => {
-  const [peers, setPeers] = useState([]);
+  const [peers, setPeers] = useState([]); // { peerID, peer, stream }
   const [stream, setStream] = useState();
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [isAudioOn, setIsAudioOn] = useState(true);
@@ -108,7 +108,7 @@ const VideoPanel = () => {
       socket.on("user-connected", userId => {
         const peer = createPeer(userId, socket.id, currentStream);
         peersRef.current.push({ peerID: userId, peer });
-        setPeers(users => [...users, { peerID: userId, peer, stream: null }]);
+        setPeers(prev => [...prev, { peerID: userId, peer, stream: null }]);
       });
 
       socket.on("offer", handleReceiveCall);
@@ -191,28 +191,41 @@ const VideoPanel = () => {
   };
 
   const handleEndCall = () => {
-    stream.getTracks().forEach(track => track.stop());
-    socket.emit("leave-room");
+    stream?.getTracks().forEach(track => track.stop());
+    peersRef.current.forEach(p => p.peer.destroy());
+    setPeers([]);
+    socket.emit("leave-room", roomId);
     window.location.href = "/";
   };
 
   const toggleVideo = () => {
-    const videoTrack = stream.getVideoTracks()[0];
-    videoTrack.enabled = !videoTrack.enabled;
-    setIsVideoOn(videoTrack.enabled);
+    const videoTrack = stream?.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      setIsVideoOn(videoTrack.enabled);
+    }
   };
 
   const toggleAudio = () => {
-    const audioTrack = stream.getAudioTracks()[0];
-    audioTrack.enabled = !audioTrack.enabled;
-    setIsAudioOn(audioTrack.enabled);
+    const audioTrack = stream?.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setIsAudioOn(audioTrack.enabled);
+    }
   };
 
   return (
     <div className="p-2 bg-dark text-white h-100">
       <h5 className="text-center mb-2">Video Call</h5>
-      
-      <video ref={localVideoRef} autoPlay muted className="w-100 mb-2" style={{ borderRadius: '8px' }} />
+
+      <video
+        ref={localVideoRef}
+        autoPlay
+        muted
+        playsInline
+        className="w-100 mb-2"
+        style={{ borderRadius: '8px' }}
+      />
 
       <div id="remote-videos" style={{ height: "calc(100% - 160px)", overflowY: "auto" }}>
         {peers.map(({ peerID, stream }) => (
@@ -238,7 +251,9 @@ const VideoPanel = () => {
         <button className="btn btn-secondary w-100" onClick={toggleAudio}>
           {isAudioOn ? "🔊 Mute" : "🔇 Unmute"}
         </button>
-        <button className="btn btn-danger w-100" onClick={handleEndCall}>❌ End Call</button>
+        <button className="btn btn-danger w-100" onClick={handleEndCall}>
+          ❌ End Call
+        </button>
       </div>
     </div>
   );
