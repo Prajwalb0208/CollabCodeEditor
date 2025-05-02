@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import axios from "axios";
+import VideoPanel from "./VideoPanel";
 
 // List of supported languages
 const LANGUAGES = [
@@ -235,6 +236,9 @@ function EditorPage() {
         <pre className="bg-secondary p-3 rounded">
           {output || "Output will appear here after compilation"}
         </pre>
+      </div>
+      <div>
+        <VideoPanel/>
       </div>
     </div>
   );
