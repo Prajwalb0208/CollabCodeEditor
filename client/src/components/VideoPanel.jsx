@@ -84,7 +84,7 @@ import Peer from 'simple-peer';
 import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 
-import { initSocket } from "../socket"; // adjust path as needed
+import { initSocket } from "../Socket"; // adjust path as needed
 
 const VideoPanel = () => {
   const [peers, setPeers] = useState([]); // { peerID, peer, stream }
