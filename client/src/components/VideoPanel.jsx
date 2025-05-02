@@ -85,13 +85,13 @@ import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 
 import { initSocket } from "../Socket.js"; // adjust path as needed
-
 const VideoPanel = () => {
-  const [peers, setPeers] = useState([]); // { peerID, peer, stream }
-  const [stream, setStream] = useState();
-  const [isVideoOn, setIsVideoOn] = useState(true);
-  const [isAudioOn, setIsAudioOn] = useState(true);
-
+    const [peers, setPeers] = useState([]); // { peerID, peer, stream }
+    const [stream, setStream] = useState();
+    const [isVideoOn, setIsVideoOn] = useState(true);
+    const [isAudioOn, setIsAudioOn] = useState(true);
+    
+    const socketRef = useRef();
   const peersRef = useRef([]);
   const localVideoRef = useRef();
   const { roomId } = useParams();
