@@ -134,9 +134,10 @@ function EditorPage() {
   };
 
   return (
-    <div className="container-fluid vh-100 d-flex flex-column">
-      <div className="row flex-grow-1">
-        {/* Client panel */}
+    <div className="container-fluid vh-100">
+      <div className="row h-100">
+        
+        {/* LEFT: Participants Panel */}
         <div className="col-md-2 bg-dark text-light d-flex flex-column">
           <img
             src="/images/codecast.png"
@@ -145,17 +146,13 @@ function EditorPage() {
             style={{ maxWidth: "150px", marginTop: "-43px" }}
           />
           <hr style={{ marginTop: "-3rem" }} />
-
-          {/* Client list container */}
           <div className="d-flex flex-column flex-grow-1 overflow-auto">
             <span className="mb-2">Members</span>
             {clients.map((client) => (
               <Client key={client.socketId} username={client.username} />
             ))}
           </div>
-
           <hr />
-          {/* Buttons */}
           <div className="mt-auto mb-3">
             <button className="btn btn-success w-100 mb-2" onClick={copyRoomId}>
               Copy Room ID
@@ -165,10 +162,10 @@ function EditorPage() {
             </button>
           </div>
         </div>
-
-        {/* Editor panel */}
-        <div className="col-md-10 text-light d-flex flex-column">
-          {/* Language selector */}
+  
+        {/* CENTER: Code Editor + Compiler */}
+        <div className="col-md-7 d-flex flex-column text-light p-0">
+          {/* Language Selector */}
           <div className="bg-dark p-2 d-flex justify-content-end">
             <select
               className="form-select w-auto"
@@ -176,72 +173,73 @@ function EditorPage() {
               onChange={(e) => setSelectedLanguage(e.target.value)}
             >
               {LANGUAGES.map((lang) => (
-                <option key={lang} value={lang}>
-                  {lang}
-                </option>
+                <option key={lang} value={lang}>{lang}</option>
               ))}
             </select>
           </div>
-
-          <Editor
-            socketRef={socketRef}
-            roomId={roomId}
-            onCodeChange={(code) => {
-              codeRef.current = code;
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Compiler toggle button */}
-      <button
-        className="btn btn-primary position-fixed bottom-0 end-0 m-3"
-        onClick={toggleCompileWindow}
-        style={{ zIndex: 1050 }}
-      >
-        {isCompileWindowOpen ? "Close Compiler" : "Open Compiler"}
-      </button>
-
-      {/* Compiler section */}
-      <div
-        className={`bg-dark text-light p-3 ${
-          isCompileWindowOpen ? "d-block" : "d-none"
-        }`}
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: isCompileWindowOpen ? "30vh" : "0",
-          transition: "height 0.3s ease-in-out",
-          overflowY: "auto",
-          zIndex: 1040,
-        }}
-      >
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 className="m-0">Compiler Output ({selectedLanguage})</h5>
-          <div>
+  
+          {/* Code Editor */}
+          <div className="flex-grow-1">
+            <Editor
+              socketRef={socketRef}
+              roomId={roomId}
+              onCodeChange={(code) => {
+                codeRef.current = code;
+              }}
+            />
+          </div>
+  
+          {/* Compiler Toggle Button */}
+          <div className="bg-dark p-2 text-end">
             <button
-              className="btn btn-success me-2"
-              onClick={runCode}
-              disabled={isCompiling}
+              className="btn btn-primary"
+              onClick={toggleCompileWindow}
             >
-              {isCompiling ? "Compiling..." : "Run Code"}
-            </button>
-            <button className="btn btn-secondary" onClick={toggleCompileWindow}>
-              Close
+              {isCompileWindowOpen ? "Close Compiler" : "Open Compiler"}
             </button>
           </div>
+  
+          {/* Compiler Section */}
+          {isCompileWindowOpen && (
+            <div
+              className="bg-dark text-light p-3"
+              style={{ height: "30vh", overflowY: "auto" }}
+            >
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 className="m-0">Compiler Output ({selectedLanguage})</h5>
+                <div>
+                  <button
+                    className="btn btn-success me-2"
+                    onClick={runCode}
+                    disabled={isCompiling}
+                  >
+                    {isCompiling ? "Compiling..." : "Run Code"}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={toggleCompileWindow}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <pre className="bg-secondary p-3 rounded">
+                {output || "Output will appear here after compilation"}
+              </pre>
+            </div>
+          )}
         </div>
-        <pre className="bg-secondary p-3 rounded">
-          {output || "Output will appear here after compilation"}
-        </pre>
-      </div>
-      <div>
-        <VideoPanel/>
+  
+        {/* RIGHT: Video Call Panel */}
+        <div className="col-md-3 bg-black text-light p-2 d-flex flex-column">
+          <h6 className="text-center">Live Participants</h6>
+          <div className="flex-grow-1 d-flex flex-wrap justify-content-center overflow-auto">
+            <VideoPanel />
+          </div>
+        </div>
       </div>
     </div>
-  );
+  );  
 }
 
 export default EditorPage;
