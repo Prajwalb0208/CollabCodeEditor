@@ -85,6 +85,7 @@ import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 
 import { initSocket } from "../Socket.js"; // adjust path as needed
+
 const VideoPanel = () => {
     const [peers, setPeers] = useState([]); // { peerID, peer, stream }
     const [stream, setStream] = useState();
@@ -92,201 +93,198 @@ const VideoPanel = () => {
     const [isAudioOn, setIsAudioOn] = useState(true);
     
     const socketRef = useRef();
-  const peersRef = useRef([]);
-  const localVideoRef = useRef();
-  const { roomId } = useParams();
+    const peersRef = useRef([]);
+    const localVideoRef = useRef();
+    const { roomId } = useParams();
 
-  useEffect(() => {
-    let isMounted = true;
-  
-    const setupMediaAndSocket = async () => {
-      try {
-        const currentStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
+    useEffect(() => {
+        let isMounted = true;
+
+        const setupMediaAndSocket = async () => {
+            try {
+                const currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true,
+                });
+
+                if (!isMounted) return;
+
+                setStream(currentStream);
+                if (localVideoRef.current) {
+                    localVideoRef.current.srcObject = currentStream;
+                }
+
+                const socketInstance = await initSocket();
+                socketRef.current = socketInstance;
+
+                socketInstance.emit("join-room", roomId, socketInstance.id);
+
+                socketInstance.on("user-connected", userId => {
+                    const peer = createPeer(userId, socketInstance.id, currentStream);
+                    peersRef.current.push({ peerID: userId, peer });
+                    setPeers(prev => [...prev, { peerID: userId, peer, stream: null }]);
+                });
+
+                socketInstance.on("offer", handleReceiveCall);
+                socketInstance.on("answer", handleAnswer);
+                socketInstance.on("ice-candidate", handleNewICECandidateMsg);
+
+                socketInstance.on("user-disconnected", userId => {
+                    const peerObj = peersRef.current.find(p => p.peerID === userId);
+                    if (peerObj) {
+                        peerObj.peer.destroy();
+                    }
+                    peersRef.current = peersRef.current.filter(p => p.peerID !== userId);
+                    setPeers(prev => prev.filter(p => p.peerID !== userId));
+                });
+            } catch (err) {
+                console.error("Error accessing media devices.", err);
+            }
+        };
+
+        setupMediaAndSocket();
+
+        return () => {
+            isMounted = false;
+            stream?.getTracks().forEach(track => track.stop());
+            peersRef.current.forEach(p => p.peer.destroy());
+            setPeers([]);
+            socketRef.current?.disconnect();
+        };
+    }, [roomId]);
+
+    const createPeer = (userToSignal, callerID, stream) => {
+        const peer = new Peer({
+            initiator: true,
+            trickle: false,
+            stream,
         });
-  
-        if (!isMounted) return;
-  
-        setStream(currentStream);
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = currentStream;
+
+        peer.on("signal", signal => {
+            socketRef.current.emit("offer", {
+                target: userToSignal,
+                caller: callerID,
+                sdp: signal,
+            });
+        });
+
+        peer.on("stream", remoteStream => {
+            updatePeerStream(userToSignal, remoteStream);
+        });
+
+        return peer;
+    };
+
+    const handleReceiveCall = ({ sdp, caller }) => {
+        const peer = new Peer({
+            initiator: false,
+            trickle: false,
+            stream,
+        });
+
+        peer.on("signal", signal => {
+            socketRef.current.emit("answer", {
+                target: caller,
+                caller: socketRef.current.id,
+                sdp: signal,
+            });
+        });
+
+        peer.on("stream", remoteStream => {
+            updatePeerStream(caller, remoteStream);
+        });
+
+        peer.signal(sdp);
+
+        peersRef.current.push({ peerID: caller, peer });
+        setPeers(prev => [...prev, { peerID: caller, peer, stream: null }]);
+    };
+
+    const updatePeerStream = (peerID, remoteStream) => {
+        setPeers(prev =>
+            prev.map(p =>
+                p.peerID === peerID ? { ...p, stream: remoteStream } : p
+            )
+        );
+    };
+
+    const handleAnswer = ({ sdp, caller }) => {
+        const item = peersRef.current.find(p => p.peerID === caller);
+        if (item) item.peer.signal(sdp);
+    };
+
+    const handleNewICECandidateMsg = ({ candidate, from }) => {
+        const peerObj = peersRef.current.find(p => p.peerID === from);
+        if (peerObj) peerObj.peer.signal(candidate);
+    };
+
+    const toggleVideo = () => {
+        const videoTrack = stream?.getVideoTracks()[0];
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            setIsVideoOn(videoTrack.enabled);
         }
-  
-        const socketInstance = await initSocket();
-        socketRef.current = socketInstance;
-  
-        socketInstance.emit("join-room", roomId, socketInstance.id);
-  
-        socketInstance.on("user-connected", userId => {
-          const peer = createPeer(userId, socketInstance.id, currentStream);
-          peersRef.current.push({ peerID: userId, peer });
-          setPeers(prev => [...prev, { peerID: userId, peer, stream: null }]);
-        });
-  
-        socketInstance.on("offer", handleReceiveCall);
-        socketInstance.on("answer", handleAnswer);
-        socketInstance.on("ice-candidate", handleNewICECandidateMsg);
-  
-        socketInstance.on("user-disconnected", userId => {
-          const peerObj = peersRef.current.find(p => p.peerID === userId);
-          if (peerObj) {
-            peerObj.peer.destroy();
-          }
-          peersRef.current = peersRef.current.filter(p => p.peerID !== userId);
-          setPeers(prev => prev.filter(p => p.peerID !== userId));
-        });
-      } catch (err) {
-        console.error("Error accessing media devices.", err);
-      }
     };
-  
-    setupMediaAndSocket();
-  
-    return () => {
-      isMounted = false;
-      stream?.getTracks().forEach(track => track.stop());
-      peersRef.current.forEach(p => p.peer.destroy());
-      setPeers([]);
-      socketRef.current?.disconnect();
+
+    const toggleAudio = () => {
+        const audioTrack = stream?.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            setIsAudioOn(audioTrack.enabled);
+        }
     };
-  }, []);
-  
 
-  const createPeer = (userToSignal, callerID, stream) => {
-    const peer = new Peer({
-      initiator: true,
-      trickle: false,
-      stream,
-    });
-  
-    peer.on("signal", signal => {
-      socketRef.current.emit("offer", {
-        target: userToSignal,
-        caller: callerID,
-        sdp: signal,
-      });
-    });
-  
-    peer.on("stream", remoteStream => {
-      updatePeerStream(userToSignal, remoteStream);
-    });
-  
-    return peer;
-  };
-  
-  const handleReceiveCall = ({ sdp, caller }) => {
-    const peer = new Peer({
-      initiator: false,
-      trickle: false,
-      stream,
-    });
-  
-    peer.on("signal", signal => {
-      socketRef.current.emit("answer", {
-        target: caller,
-        caller: socketRef.current.id,
-        sdp: signal,
-      });
-    });
-  
-    peer.on("stream", remoteStream => {
-      updatePeerStream(caller, remoteStream);
-    });
-  
-    peer.signal(sdp);
-  
-    peersRef.current.push({ peerID: caller, peer });
-    setPeers(prev => [...prev, { peerID: caller, peer, stream: null }]);
-  };
-  
-  const updatePeerStream = (peerID, remoteStream) => {
-    setPeers(prev =>
-      prev.map(p =>
-        p.peerID === peerID ? { ...p, stream: remoteStream } : p
-      )
-    );
-  };
-  
-  const handleAnswer = ({ sdp, caller }) => {
-    const item = peersRef.current.find(p => p.peerID === caller);
-    if (item) item.peer.signal(sdp);
-  };
-  
-  const handleNewICECandidateMsg = ({ candidate, from }) => {
-    const peerObj = peersRef.current.find(p => p.peerID === from);
-    if (peerObj) peerObj.peer.signal(candidate);
-  };
-  
+    const handleEndCall = () => {
+        stream?.getTracks().forEach(track => track.stop());
+        peersRef.current.forEach(p => p.peer.destroy());
+        setPeers([]);
+        socketRef.current?.emit("leave-room", roomId);
+        window.location.href = "/";
+    };
 
-  const toggleVideo = () => {
-    const videoTrack = stream?.getVideoTracks()[0];
-    if (videoTrack) {
-      videoTrack.enabled = !videoTrack.enabled;
-      setIsVideoOn(videoTrack.enabled);
-    }
-  };
-  
-  const toggleAudio = () => {
-    const audioTrack = stream?.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = !audioTrack.enabled;
-      setIsAudioOn(audioTrack.enabled);
-    }
-  };
-  
-  const handleEndCall = () => {
-    stream?.getTracks().forEach(track => track.stop());
-    peersRef.current.forEach(p => p.peer.destroy());
-    setPeers([]);
-    socketRef.current?.emit("leave-room", roomId);
-    window.location.href = "/";
-  };
-  
+    return (
+        <div className="p-2 bg-dark text-white h-100">
+            <h5 className="text-center mb-2">Video Call</h5>
 
-  return (
-    <div className="p-2 bg-dark text-white h-100">
-      <h5 className="text-center mb-2">Video Call</h5>
-
-      <video
-        ref={localVideoRef}
-        autoPlay
-        muted
-        playsInline
-        className="w-100 mb-2"
-        style={{ borderRadius: '8px' }}
-      />
-
-      <div id="remote-videos" style={{ height: "calc(100% - 160px)", overflowY: "auto" }}>
-        {peers.map(({ peerID, stream }) => (
-          stream && (
             <video
-              key={peerID}
-              autoPlay
-              playsInline
-              ref={video => {
-                if (video) video.srcObject = stream;
-              }}
-              className="w-100 mb-2"
-              style={{ borderRadius: '8px' }}
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-100 mb-2"
+                style={{ borderRadius: '8px' }}
             />
-          )
-        ))}
-      </div>
 
-      <div className="d-flex gap-2 mt-2">
-        <button className="btn btn-secondary w-100" onClick={toggleVideo}>
-          {isVideoOn ? "🎥 Turn Off Camera" : "📷 Turn On Camera"}
-        </button>
-        <button className="btn btn-secondary w-100" onClick={toggleAudio}>
-          {isAudioOn ? "🔊 Mute" : "🔇 Unmute"}
-        </button>
-        <button className="btn btn-danger w-100" onClick={handleEndCall}>
-          ❌ End Call
-        </button>
-      </div>
-    </div>
-  );
+            <div id="remote-videos" style={{ height: "calc(100% - 160px)", overflowY: "auto" }}>
+                {peers.map(({ peerID, stream }) => (
+                    stream && (
+                        <video
+                            key={peerID}
+                            autoPlay
+                            playsInline
+                            ref={video => {
+                                if (video) video.srcObject = stream;
+                            }}
+                            className="w-100 mb-2"
+                            style={{ borderRadius: '8px' }}
+                        />
+                    )
+                ))}
+            </div>
+
+            <div className="d-flex gap-2 mt-2">
+                <button className="btn btn-secondary w-100" onClick={toggleVideo}>
+                    {isVideoOn ? "🎥 Turn Off Camera" : "📷 Turn On Camera"}
+                </button>
+                <button className="btn btn-secondary w-100" onClick={toggleAudio}>
+                    {isAudioOn ? "🔊 Mute" : "🔇 Unmute"}
+                </button>
+                <button className="btn btn-danger w-100" onClick={handleEndCall}>
+                    ❌ End Call
+                </button>
+            </div>
+        </div>
+    );
 };
 
 export default VideoPanel;
