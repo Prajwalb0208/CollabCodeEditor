@@ -220,7 +220,7 @@
 
 // src/components/VideoPanel.jsx
 import React, { useEffect, useRef, useState } from 'react';
-import Peer from 'simple-peer';
+import Peer from 'simple-peer/simplepeer.min.js';
 import { useParams, useNavigate } from 'react-router-dom';
 import socket, { initSocket } from '../Socket';
 import { ACTIONS } from '../Actions';
