@@ -223,7 +223,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Peer from 'simple-peer/simplepeer.min.js';
 import { useParams, useNavigate } from 'react-router-dom';
 import socket, { initSocket } from '../Socket';
-import { ACTIONS } from '../Actions';
+import { ACTIONS } from './Actions';
 
 // Component for displaying remote video streams
 const RemoteVideo = ({ stream, username }) => {
